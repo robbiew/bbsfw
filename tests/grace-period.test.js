@@ -14,6 +14,19 @@ const REPO_ROOT = path.join(__dirname, '..');
 
 const GRACE_MS = 1500;
 
+// Reserve an ephemeral port by binding to 0 and releasing it
+// (the config validator does not accept LISTEN_PORT=0 directly)
+function getFreePort() {
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.once('error', reject);
+    srv.listen(0, () => {
+      const port = srv.address().port;
+      srv.close(() => resolve(port));
+    });
+  });
+}
+
 function connect(port, host) {
   return new Promise((resolve, reject) => {
     const sock = net.createConnection({ port, host }, () => resolve(sock));
@@ -53,7 +66,7 @@ test('reconnect after a session is held for the grace period, with client bytes 
     backend.listen(0, '127.0.0.1', () => resolve(backend.address().port));
   });
 
-  const listenPort = 20000 + Math.floor(Math.random() * 20000);
+  const listenPort = await getFreePort();
   const child = spawn(process.execPath, ['server.js'], {
     cwd: REPO_ROOT,
     env: {
@@ -71,8 +84,11 @@ test('reconnect after a session is held for the grace period, with client bytes 
     },
   });
 
-  t.after(() => {
+  t.after(async () => {
+    // SIGKILL on purpose: the graceful-shutdown handler can wait up to 10s
+    const exited = new Promise((r) => child.once('exit', r));
     child.kill('SIGKILL');
+    await exited;
     backend.close();
   });
 
@@ -85,6 +101,9 @@ test('reconnect after a session is held for the grace period, with client bytes 
         clearTimeout(timer);
         resolve();
       }
+    });
+    child.stderr.on('data', (d) => {
+      out += d.toString();
     });
     child.on('exit', (code) => reject(new Error(`server exited (${code}):\n${out}`)));
   });
