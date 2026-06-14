@@ -53,7 +53,7 @@ class ProxyConnection {
       this.clientSocket.destroy();
       return;
     }
-    
+
     logger.info(`[${this.connectionId}] New connection from ${this.clientAddress}`);
     
     // Check IP filter (whitelist, blocklist, and rate limiting)
@@ -84,7 +84,7 @@ class ProxyConnection {
       this.clientSocket.destroy();
       return;
     }
-    
+
     // Disable Nagle's algorithm for better real-time performance
     this.clientSocket.setNoDelay(true);
     this.clientSocket.setKeepAlive(true);
